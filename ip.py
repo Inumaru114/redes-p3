@@ -1,6 +1,5 @@
 from iputils import *
 
-
 class IP:
     def __init__(self, enlace):
         """
@@ -27,11 +26,22 @@ class IP:
             # TODO: Trate corretamente o campo TTL do datagrama
             self.enlace.enviar(datagrama, next_hop)
 
-    def _next_hop(self, dest_addr):
-        # TODO: Use a tabela de encaminhamento para determinar o próximo salto
-        # (next_hop) a partir do endereço de destino do datagrama (dest_addr).
-        # Retorne o next_hop para o dest_addr fornecido.
-        pass
+    def _next_hop(self, destino):
+        destino_int = struct.unpack('!I', str2addr(destino))[0]
+        melhor_prefixo = None
+        maior_tamanho = -1
+        
+        for (cidr, salto) in self._rotas:
+            rede, mascara = cidr.split('/')
+            mascara = int(mascara)
+            rede_int = struct.unpack('!I', str2addr(rede))[0]
+            
+            if (destino_int >> (32 - mascara)) == (rede_int >> (32 - mascara)):
+                if mascara > maior_tamanho:
+                    melhor_prefixo = salto
+                    maior_tamanho = mascara
+        
+        return melhor_prefixo
 
     def definir_endereco_host(self, meu_endereco):
         """
@@ -42,16 +52,7 @@ class IP:
         self.meu_endereco = meu_endereco
 
     def definir_tabela_encaminhamento(self, tabela):
-        """
-        Define a tabela de encaminhamento no formato
-        [(cidr0, next_hop0), (cidr1, next_hop1), ...]
-
-        Onde os CIDR são fornecidos no formato 'x.y.z.w/n', e os
-        next_hop são fornecidos no formato 'x.y.z.w'.
-        """
-        # TODO: Guarde a tabela de encaminhamento. Se julgar conveniente,
-        # converta-a em uma estrutura de dados mais eficiente.
-        pass
+        self._rotas = tabela
 
     def registrar_recebedor(self, callback):
         """
