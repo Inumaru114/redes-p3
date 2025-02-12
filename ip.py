@@ -25,6 +25,29 @@ class IP:
             next_hop = self._next_hop(dst_addr)
             # TODO: Trate corretamente o campo TTL do datagrama
             self.enlace.enviar(datagrama, next_hop)
+    
+   def __raw_recv(self, datagrama):
+        dscp, ecn, identification, flags, frag_offset, ttl, proto, \
+           src_addr, dst_addr, payload = read_ipv4_header(datagrama)
+        
+        if dst_addr == self.meu_endereco:
+            # atua como host
+            if proto == IPPROTO_TCP and self.callback:
+                self.callback(src_addr, dst_addr, payload)
+        else:
+            # atua como roteador
+            if ttl <= 1:  # TTL já é 1, ao decrementá-lo chegará a zero
+                # Envia ICMP Time Exceeded de volta ao remetente
+                self.__enviar_icmp_time_exceeded(src_addr, datagrama[:28])
+            else:
+                next_hop = self._next_hop(dst_addr)
+                ttl -= 1
+                datagrama = datagrama[:8] + struct.pack('!B', ttl) + datagrama[9:]
+                if not self.ignore_checksum:
+                    datagrama = datagrama[:10] + b'\x00\x00' + datagrama[12:]
+                    checksum = calc_checksum(datagrama[:20])
+                    datagrama = datagrama[:10] + struct.pack('!H', checksum) + datagrama[12:]
+                self.enlace.enviar(datagrama, next_hop)
 
     def _next_hop(self, destino):
         destino_int = struct.unpack('!I', str2addr(destino))[0]
