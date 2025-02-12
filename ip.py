@@ -83,10 +83,48 @@ class IP:
         """
         self.callback = callback
 
-    def enviar(self, segmento, destino):
-        datagrama = self._criar_datagrama_ip(
-            self._endereco_host, destino,
-            IPPROTO_TCP, segmento
+    def __enviar_icmp_time_exceeded(self, src_addr, discarded_datagram):
+        tipo = 11
+        codigo = 0
+        cabecalho_icmp = struct.pack('!BBH', tipo, codigo, 0) + discarded_datagram
+        checksum_icmp = calc_checksum(cabecalho_icmp)
+        payload_icmp = struct.pack('!BBH', tipo, codigo, checksum_icmp) + cabecalho_icmp[4:]
+
+        versao_ihl = 0x45
+        dscpecn = 0
+        comprimento_total = 20 + len(payload_icmp)
+        cabecalho_ip = struct.pack('!BBHHHBBHII', 
+            versao_ihl, dscpecn, comprimento_total,
+            0, 0, 64, IPPROTO_ICMP, 0,
+            struct.unpack('!I', str2addr(self.meu_endereco))[0],
+            struct.unpack('!I', str2addr(src_addr))[0]
         )
-        proximo_salto = self._obter_proximo_salto(destino)
-        self._enlace.enviar(datagrama, proximo_salto)
+
+        if not self.ignore_checksum:
+            checksum = calc_checksum(cabecalho_ip)
+            cabecalho_ip = cabecalho_ip[:10] + struct.pack('!H', checksum) + cabecalho_ip[12:]
+
+        pacote = cabecalho_ip + payload_icmp
+        self.enlace.enviar(pacote, self._next_hop(src_addr))
+
+    def enviar(self, segmento, dest_addr):
+        campos_cabecalho = (
+            0x45, 0,  
+            20 + len(segmento),  
+            0,  
+            0,  
+            64, 
+            IPPROTO_TCP,
+            0,  
+            struct.unpack('!I', str2addr(self.meu_endereco))[0],  
+            struct.unpack('!I', str2addr(dest_addr))[0]  
+        )
+
+        cabecalho = struct.pack('!BBHHHBBHII', *campos_cabecalho)
+
+        if not self.ignore_checksum:
+            checksum = calc_checksum(cabecalho)
+            cabecalho = cabecalho[:10] + struct.pack('!H', checksum) + cabecalho[12:]
+
+        datagrama = cabecalho + segmento
+        self.enlace.enviar(datagrama, self._next_hop(dest_addr))
