@@ -60,12 +60,10 @@ class IP:
         """
         self.callback = callback
 
-    def enviar(self, segmento, dest_addr):
-        """
-        Envia segmento para dest_addr, onde dest_addr é um endereço IPv4
-        (string no formato x.y.z.w).
-        """
-        next_hop = self._next_hop(dest_addr)
-        # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
-        # datagrama com o cabeçalho IP, contendo como payload o segmento.
-        self.enlace.enviar(datagrama, next_hop)
+    def enviar(self, segmento, destino):
+        datagrama = self._criar_datagrama_ip(
+            self._endereco_host, destino,
+            IPPROTO_TCP, segmento
+        )
+        proximo_salto = self._obter_proximo_salto(destino)
+        self._enlace.enviar(datagrama, proximo_salto)
